@@ -22,7 +22,7 @@ polars-strsim can then be installed in your current python environment by runnin
 
 ```python
 import polars as pl
-from polars_strsim import levenshtein
+from polars_strsim import levenshtein, jaro, jaro_winkler
 
 df = pl.DataFrame({
     "name_a": ["phillips", "phillips", "",         "", None,       None],
@@ -39,17 +39,17 @@ print(df)
 ```
 **Output:**
 ```
-shape: (6, 3)
-┌──────────┬──────────┬─────────────┐
-│ name_a   ┆ name_b   ┆ levenshtein │
-│ ---      ┆ ---      ┆ ---         │
-│ str      ┆ str      ┆ f64         │
-╞══════════╪══════════╪═════════════╡
-│ phillips ┆ phillips ┆ 1.0         │
-│ phillips ┆ philips  ┆ 0.875       │
-│          ┆ phillips ┆ 0.0         │
-│          ┆          ┆ 1.0         │
-│ null     ┆ phillips ┆ null        │
-│ null     ┆ null     ┆ null        │
-└──────────┴──────────┴─────────────┘
+shape: (6, 5)
+┌──────────┬──────────┬─────────────┬──────────┬──────────────┐
+│ name_a   ┆ name_b   ┆ levenshtein ┆ jaro     ┆ jaro_winkler │
+│ ---      ┆ ---      ┆ ---         ┆ ---      ┆ ---          │
+│ str      ┆ str      ┆ f64         ┆ f64      ┆ f64          │
+╞══════════╪══════════╪═════════════╪══════════╪══════════════╡
+│ phillips ┆ phillips ┆ 1.0         ┆ 1.0      ┆ 1.0          │
+│ phillips ┆ philips  ┆ 0.875       ┆ 0.958333 ┆ 0.975        │
+│          ┆ phillips ┆ 0.0         ┆ 0.0      ┆ 0.0          │
+│          ┆          ┆ 1.0         ┆ 1.0      ┆ 1.0          │
+│ null     ┆ phillips ┆ null        ┆ null     ┆ null         │
+│ null     ┆ null     ┆ null        ┆ null     ┆ null         │
+└──────────┴──────────┴─────────────┴──────────┴──────────────┘
 ```
