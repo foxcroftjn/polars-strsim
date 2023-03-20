@@ -108,38 +108,45 @@ fn compute_jaro(a: &str, b: &str) -> f64 {
     if a.len() == 1 && b.len() == 1 {
         return if a[0] == b[0] { 1.0 } else { 0.0 };
     }
-    assert!(a.len().max(b.len()) / 2 > 0, "{:?} {:?}", a, b);
-    let match_bound = a.len().max(b.len()) / 2 - 1;
-    let mut matches = 0;
-    let mut transpositions = 0;
-    let mut flagged_1 = vec![];
-    let mut flagged_2 = vec![];
+    let bound = a.len().max(b.len()) / 2 - 1;
+    let mut m = 0;
+    let mut flagged = vec![[false; 2]; a.len().max(b.len())];
     for i in 0..a.len() {
-        assert!(b.len() > 0, "{:?}", b);
-        let upperbound = (i + match_bound).min(b.len() - 1);
-        let lowerbound = 0.max(i as i32 - match_bound as i32) as usize;
+        let lowerbound = if bound > i { 0 } else { i - bound };
+        let upperbound = (i + bound).min(b.len() - 1);
         for j in lowerbound..=upperbound {
-            if a[i] == b[j] && !flagged_2.contains(&j) {
-                matches += 1;
-                flagged_1.push(i);
-                flagged_2.push(j);
+            if a[i] == b[j] && !flagged[j][1] {
+                m += 1;
+                flagged[i][0] = true;
+                flagged[j][1] = true;
                 break;
             }
         }
     }
-    flagged_2.sort();
-    for (&i, &j) in flagged_1.iter().zip(flagged_2.iter()) {
-        if a[i] != b[j] {
-            transpositions += 1;
-        }
-    }
-
-    if matches == 0 {
+    let t = flagged
+        .iter()
+        .enumerate()
+        .filter_map(|(i, [flag, _])| match flag {
+            true => Some(i),
+            false => None,
+        })
+        .zip(
+            flagged
+                .iter()
+                .enumerate()
+                .filter_map(|(j, [_, flag])| match flag {
+                    true => Some(j),
+                    false => None,
+                }),
+        )
+        .filter(|&(i, j)| a[i] != b[j])
+        .count();
+    if m == 0 {
         return 0.0;
     } else {
-        return (matches as f64 / a.len() as f64
-            + matches as f64 / b.len() as f64
-            + (matches - transpositions / 2) as f64 / matches as f64)
+        return (m as f64 / a.len() as f64
+            + m as f64 / b.len() as f64
+            + (m - t / 2) as f64 / m as f64)
             / 3.0;
     }
 }
@@ -151,13 +158,13 @@ pub(super) fn parallel_jaro(df: DataFrame, col_a: &str, col_b: &str) -> PolarsRe
 fn compute_jaro_winkler(a: &str, b: &str) -> f64 {
     let jaro_similarity = compute_jaro(a, b);
     return if jaro_similarity > 0.7 {
-        let shared_prefix = a
+        let shared_prefix_length = a
             .chars()
             .zip(b.chars())
             .take(4)
-            .take_while(|(a, b)| a == b)
+            .take_while(|(c, d)| c == d)
             .count() as f64;
-        jaro_similarity + (shared_prefix * 0.1 * (1.0 - jaro_similarity))
+        jaro_similarity + (shared_prefix_length * 0.1 * (1.0 - jaro_similarity))
     } else {
         jaro_similarity
     };
