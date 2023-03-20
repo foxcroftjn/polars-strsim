@@ -65,22 +65,22 @@ fn compute_levenshtein(a: &str, b: &str) -> f64 {
     }
     let a = a.chars().collect::<Vec<_>>();
     let b = b.chars().collect::<Vec<_>>();
-    let mut matrix = [(0..=b.len()).collect(), vec![0; b.len() + 1]];
+    let mut matrix: Vec<_> = (0..=b.len()).map(|i| [i, 0]).collect();
     for i in 0..a.len() {
         let v0 = i % 2;
         let v1 = (i + 1) % 2;
-        matrix[v1][0] = i + 1;
+        matrix[0][v1] = i + 1;
         for j in 0..b.len() {
-            matrix[v1][j + 1] = if a[i] == b[j] {
-                matrix[v0][j]
+            matrix[j + 1][v1] = if a[i] == b[j] {
+                matrix[j][v0]
             } else {
-                matrix[v0][j] + 1
+                matrix[j][v0] + 1
             }
-            .min(matrix[v0][j + 1] + 1)
-            .min(matrix[v1][j] + 1);
+            .min(matrix[j + 1][v0] + 1)
+            .min(matrix[j][v1] + 1);
         }
     }
-    return 1.0 - (matrix[a.len() % 2][b.len()] as f64 / a.len().max(b.len()) as f64);
+    return 1.0 - (matrix[b.len()][a.len() % 2] as f64 / a.len().max(b.len()) as f64);
 }
 
 pub(super) fn parallel_levenshtein(
