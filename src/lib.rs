@@ -6,23 +6,23 @@ use pyo3_polars::error::PyPolarsErr;
 use pyo3_polars::{PyDataFrame, PySeries};
 
 #[pyfunction]
-fn levenshtein(pydf: PyDataFrame, col_a: &str, col_b: &str) -> PyResult<PySeries> {
+fn levenshtein(pydf: PyDataFrame, col_a: &str, col_b: &str, name: &str) -> PyResult<PySeries> {
     let df: DataFrame = pydf.into();
-    let s = strsim::parallel_levenshtein(df, col_a, col_b).map_err(PyPolarsErr::from)?;
+    let s = strsim::parallel_levenshtein(df, col_a, col_b, name).map_err(PyPolarsErr::from)?;
     Ok(PySeries(s))
 }
 
 #[pyfunction]
-fn jaro(pydf: PyDataFrame, col_a: &str, col_b: &str) -> PyResult<PySeries> {
+fn jaro(pydf: PyDataFrame, col_a: &str, col_b: &str, name: &str) -> PyResult<PySeries> {
     let df: DataFrame = pydf.into();
-    let s = strsim::parallel_jaro(df, col_a, col_b).map_err(PyPolarsErr::from)?;
+    let s = strsim::parallel_jaro(df, col_a, col_b, name).map_err(PyPolarsErr::from)?;
     Ok(PySeries(s))
 }
 
 #[pyfunction]
-fn jaro_winkler(pydf: PyDataFrame, col_a: &str, col_b: &str) -> PyResult<PySeries> {
+fn jaro_winkler(pydf: PyDataFrame, col_a: &str, col_b: &str, name: &str) -> PyResult<PySeries> {
     let df: DataFrame = pydf.into();
-    let s = strsim::parallel_jaro_winkler(df, col_a, col_b).map_err(PyPolarsErr::from)?;
+    let s = strsim::parallel_jaro_winkler(df, col_a, col_b, name).map_err(PyPolarsErr::from)?;
     Ok(PySeries(s))
 }
 

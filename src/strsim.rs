@@ -87,14 +87,9 @@ pub(super) fn parallel_levenshtein(
     df: DataFrame,
     col_a: &str,
     col_b: &str,
+    name: &str,
 ) -> PolarsResult<Series> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        "levenshtein",
-        compute_levenshtein,
-    )?)
+    Ok(parallel_apply(df, col_a, col_b, name, compute_levenshtein)?)
 }
 
 fn compute_jaro(a: &str, b: &str) -> f64 {
@@ -151,8 +146,13 @@ fn compute_jaro(a: &str, b: &str) -> f64 {
     }
 }
 
-pub(super) fn parallel_jaro(df: DataFrame, col_a: &str, col_b: &str) -> PolarsResult<Series> {
-    Ok(parallel_apply(df, col_a, col_b, "jaro", compute_jaro)?)
+pub(super) fn parallel_jaro(
+    df: DataFrame,
+    col_a: &str,
+    col_b: &str,
+    name: &str,
+) -> PolarsResult<Series> {
+    Ok(parallel_apply(df, col_a, col_b, name, compute_jaro)?)
 }
 
 fn compute_jaro_winkler(a: &str, b: &str) -> f64 {
@@ -174,12 +174,13 @@ pub(super) fn parallel_jaro_winkler(
     df: DataFrame,
     col_a: &str,
     col_b: &str,
+    name: &str,
 ) -> PolarsResult<Series> {
     Ok(parallel_apply(
         df,
         col_a,
         col_b,
-        "jaro_winkler",
+        name,
         compute_jaro_winkler,
     )?)
 }

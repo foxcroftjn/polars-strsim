@@ -22,17 +22,17 @@ polars-strsim can then be installed in your current python environment by runnin
 
 ```python
 import polars as pl
-from polars_strsim import levenshtein, jaro, jaro_winkler
+from polars_strsim import *
 
 df = pl.DataFrame({
     "name_a": ["phillips", "phillips", "",         "", None,       None],
     "name_b": ["phillips", "philips",  "phillips", "", "phillips", None]
-})
-
-df = df.with_columns(
-    levenshtein(df, "name_a", "name_b"),
-    jaro(df, "name_a", "name_b"),
-    jaro_winkler(df, "name_a", "name_b")
+}).pipe(
+    levenshtein, 'name_a', 'name_b'
+).pipe(
+    jaro, 'name_a', 'name_b'
+).pipe(
+    jaro_winkler, 'name_a', 'name_b'
 )
 
 print(df)
