@@ -12,9 +12,13 @@ def jaro_winkler(df, col_a, col_b, name='jaro_winkler'):
 def jaccard(df, col_a, col_b, name='jaccard'):
     return df.with_columns(rust.jaccard(df, col_a, col_b, name))
 
+def sorensen_dice(df, col_a, col_b, name='sorensen_dice'):
+    return df.with_columns(rust.sorensen_dice(df, col_a, col_b, name))
+
 __all__ = [
     "levenshtein",
     "jaro",
     "jaro_winkler",
     "jaccard",
+    "sorensen_dice",
 ]

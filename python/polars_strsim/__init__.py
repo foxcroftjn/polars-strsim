@@ -5,4 +5,5 @@ __all__ = [
     "jaro",
     "jaro_winkler",
     "jaccard",
+    "sorensen_dice",
 ]
