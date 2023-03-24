@@ -1,7 +1,7 @@
 use polars::prelude::*;
 use rayon::prelude::*;
 
-const ASSUMED_MAX_STRING_LENGTH: usize = 50;
+const INITIAL_BUFFER_LENGTH: usize = 50;
 
 enum SimilarityFunctionType {
     Levenshtein,
@@ -78,13 +78,15 @@ fn parallel_apply(
 struct Levenshtein {
     a_buffer: Vec<char>,
     b_buffer: Vec<char>,
+    matrix: Vec<[usize; 2]>,
 }
 
 impl Levenshtein {
     fn new() -> Levenshtein {
         Levenshtein {
-            a_buffer: Vec::with_capacity(ASSUMED_MAX_STRING_LENGTH),
-            b_buffer: Vec::with_capacity(ASSUMED_MAX_STRING_LENGTH),
+            a_buffer: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
+            b_buffer: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
+            matrix: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
         }
     }
 }
@@ -95,24 +97,27 @@ impl SimilarityFunction for Levenshtein {
         if (a == "" && b == "") || (a == b) {
             return 1.0;
         }
-        self.a_buffer.clear();
-        for c in a.chars() {
-            self.a_buffer.push(c);
-        }
-        let a = &self.a_buffer;
-        self.b_buffer.clear();
-        for c in b.chars() {
-            self.b_buffer.push(c);
-        }
-        let b = &self.b_buffer;
-        let mut iter = (0..100).map(|i| [i, 0]);
-        let mut matrix: [_; 30] = std::array::from_fn(|_| iter.next().unwrap());
-        for i in 0..a.len() {
+        let a = {
+            self.a_buffer.clear();
+            self.a_buffer.extend(a.chars());
+            &self.a_buffer
+        };
+        let b = {
+            self.b_buffer.clear();
+            self.b_buffer.extend(b.chars());
+            &self.b_buffer
+        };
+        let matrix = {
+            self.matrix.clear();
+            self.matrix.extend((0..=b.len()).map(|i| [i, 0]));
+            &mut self.matrix
+        };
+        for (i, &a_i) in a.iter().enumerate() {
             let v0 = i % 2;
             let v1 = (i + 1) % 2;
             matrix[0][v1] = i + 1;
-            for j in 0..b.len() {
-                matrix[j + 1][v1] = if a[i] == b[j] {
+            for (j, &b_j) in b.iter().enumerate() {
+                matrix[j + 1][v1] = if a_i == b_j {
                     matrix[j][v0]
                 } else {
                     matrix[j][v0] + 1
@@ -140,11 +145,19 @@ pub(super) fn parallel_levenshtein(
     )?)
 }
 
-struct Jaro {}
+struct Jaro {
+    a_buffer: Vec<char>,
+    b_buffer: Vec<char>,
+    flagged: Vec<[bool; 2]>,
+}
 
 impl Jaro {
     fn new() -> Jaro {
-        Jaro {}
+        Jaro {
+            a_buffer: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
+            b_buffer: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
+            flagged: Vec::with_capacity(INITIAL_BUFFER_LENGTH),
+        }
     }
 }
 
@@ -155,19 +168,32 @@ impl SimilarityFunction for Jaro {
         } else if a == "" || b == "" {
             return 0.0;
         }
-        let a = a.chars().collect::<Vec<_>>();
-        let b = b.chars().collect::<Vec<_>>();
+        let a = {
+            self.a_buffer.clear();
+            self.a_buffer.extend(a.chars());
+            &self.a_buffer
+        };
+        let b = {
+            self.b_buffer.clear();
+            self.b_buffer.extend(b.chars());
+            &self.b_buffer
+        };
         if a.len() == 1 && b.len() == 1 {
             return if a[0] == b[0] { 1.0 } else { 0.0 };
         }
         let bound = a.len().max(b.len()) / 2 - 1;
         let mut m = 0;
-        let mut flagged = vec![[false; 2]; a.len().max(b.len())];
-        for i in 0..a.len() {
+        let flagged = {
+            self.flagged.clear();
+            self.flagged
+                .extend(std::iter::repeat([false; 2]).take(a.len().max(b.len())));
+            &mut self.flagged
+        };
+        for (i, &a_i) in a.iter().enumerate() {
             let lowerbound = if bound > i { 0 } else { i - bound };
             let upperbound = (i + bound).min(b.len() - 1);
             for j in lowerbound..=upperbound {
-                if a[i] == b[j] && !flagged[j][1] {
+                if a_i == b[j] && !flagged[j][1] {
                     m += 1;
                     flagged[i][0] = true;
                     flagged[j][1] = true;
