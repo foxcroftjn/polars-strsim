@@ -1,5 +1,6 @@
 use polars::prelude::*;
 use rayon::prelude::*;
+use std::collections::HashMap;
 
 const INITIAL_BUFFER_LENGTH: usize = 50;
 
@@ -7,6 +8,7 @@ enum SimilarityFunctionType {
     Levenshtein,
     Jaro,
     JaroWinkler,
+    Jaccard,
 }
 
 trait SimilarityFunction {
@@ -54,6 +56,7 @@ fn parallel_apply(
                     SimilarityFunctionType::Levenshtein => Box::new(Levenshtein::new()),
                     SimilarityFunctionType::Jaro => Box::new(Jaro::new()),
                     SimilarityFunctionType::JaroWinkler => Box::new(JaroWinkler::new()),
+                    SimilarityFunctionType::Jaccard => Box::new(Jaccard::new()),
                 };
 
                 Ok(string_a
@@ -287,6 +290,57 @@ pub(super) fn parallel_jaro_winkler(
     )?)
 }
 
+struct Jaccard {
+    buffer: HashMap<char, [usize; 2]>,
+}
+
+impl Jaccard {
+    fn new() -> Jaccard {
+        Jaccard {
+            buffer: HashMap::with_capacity(INITIAL_BUFFER_LENGTH),
+        }
+    }
+}
+
+impl SimilarityFunction for Jaccard {
+    fn compute(&mut self, a: &str, b: &str) -> f64 {
+        if (a == "" && b == "") || (a == b) {
+            return 1.0;
+        } else if a == "" || b == "" {
+            return 0.0;
+        }
+        let buffer = {
+            self.buffer.clear();
+            &mut self.buffer
+        };
+        a.chars()
+            .for_each(|c| buffer.entry(c).or_insert([0; 2])[0] += 1);
+        b.chars()
+            .for_each(|c| buffer.entry(c).or_insert([0; 2])[1] += 1);
+        let frac = buffer.values().fold([0; 2], |mut f, v| {
+            f[0] += v[0].min(v[1]);
+            f[1] += v[0].max(v[1]);
+            f
+        });
+        return frac[0] as f64 / frac[1] as f64;
+    }
+}
+
+pub(super) fn parallel_jaccard(
+    df: DataFrame,
+    col_a: &str,
+    col_b: &str,
+    name: &str,
+) -> PolarsResult<Series> {
+    Ok(parallel_apply(
+        df,
+        col_a,
+        col_b,
+        name,
+        SimilarityFunctionType::Jaccard,
+    )?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,6 +362,7 @@ mod tests {
     impl Test for Levenshtein {}
     impl Test for Jaro {}
     impl Test for JaroWinkler {}
+    impl Test for Jaccard {}
 
     #[test]
     fn levenshtein_edge_cases() {
@@ -1270,5 +1325,106 @@ mod tests {
         jw.test("comalander", "cumberlander", 0.69722222);
         jw.test("holtzendorff", "holsendorf", 0.91833333);
         jw.test("beirdneau", "birdno", 0.81666667);
+    }
+
+    #[test]
+    fn jaccard_edge_cases() {
+        let mut jac = Jaccard::new();
+        jac.test("s", "s", 1.0);
+        jac.test("", "", 1.0);
+        jac.test("string", "", 0.0);
+        jac.test("", "string", 0.0);
+    }
+
+    #[test]
+    fn jaccard_test_cases() {
+        let mut jac = Jaccard::new();
+        jac.test("phillips", "philips", 0.875);
+        jac.test("kelly", "kelley", 0.83333333);
+        jac.test("wood", "woods", 0.8);
+        jac.test("russell", "russel", 0.85714286);
+        jac.test("macdonald", "mcdonald", 0.88888889);
+        jac.test("hansen", "hanson", 0.71428571);
+        jac.test("gray", "grey", 0.6);
+        jac.test("petersen", "peterson", 0.77777778);
+        jac.test("myers", "myres", 1.0);
+        jac.test("chamberlain", "chamberlin", 0.90909091);
+        jac.test("mullins", "mullens", 0.75);
+        jac.test("olsen", "olson", 0.66666667);
+        jac.test("pennington", "penington", 0.9);
+        jac.test("livingston", "levingston", 0.81818182);
+        jac.test("plantagenet", "lancaster", 0.42857143);
+        jac.test("horner", "homer", 0.57142857);
+        jac.test("featherstone", "featherston", 0.91666667);
+        jac.test("higginbotham", "higgenbotham", 0.84615385);
+        jac.test("plantagenet", "gaunt", 0.33333333);
+        jac.test("asbury", "asberry", 0.625);
+        jac.test("schumacher", "schumaker", 0.72727273);
+        jac.test("reedy", "rudy", 0.5);
+        jac.test("powhatan", "rolfe", 0.083333333);
+        jac.test("landen", "austrasia", 0.071428571);
+        jac.test("scotland", "canmore", 0.36363636);
+        jac.test("woodbury", "woodberry", 0.7);
+        jac.test("powhatan", "daughter", 0.23076923);
+        jac.test("anjou", "jerusalem", 0.27272727);
+        jac.test("zachary", "zackery", 0.55555556);
+        jac.test("witherspoon", "weatherspoon", 0.76923077);
+        jac.test("fenstermacher", "fenstermaker", 0.78571429);
+        jac.test("hetherington", "heatherington", 0.92307692);
+        jac.test("demeschines", "meschin", 0.63636364);
+        jac.test("bretagne", "brittany", 0.45454545);
+        jac.test("mormaer", "thane", 0.2);
+        jac.test("sloman", "poythress", 0.15384615);
+        jac.test("aetheling", "exile", 0.4);
+        jac.test("barlowe", "almy", 0.22222222);
+        jac.test("macmurrough", "macmurchada", 0.46666667);
+        jac.test("tourault", "archambault", 0.35714286);
+        jac.test("dechatellerault", "chatellerault", 0.86666667);
+        jac.test("roosevelt", "rooswell", 0.54545455);
+        jac.test("trico", "rapalje", 0.090909091);
+        jac.test("hatherly", "hanford", 0.25);
+        jac.test("carow", "roosevelt", 0.16666667);
+        jac.test("maugis", "miville", 0.18181818);
+        jac.test("decrepon", "hardaknutsson", 0.23529412);
+        jac.test("deswynnerton", "swinnerton", 0.69230769);
+        jac.test("drusus", "nero", 0.11111111);
+        jac.test("verdon", "brouwer", 0.3);
+        jac.test("cavendishbentinck", "bentinck", 0.47058824);
+        jac.test("mcmurrough", "leinster", 0.058823529);
+        jac.test("reinschmidt", "cuntze", 0.30769231);
+        jac.test("pichon", "sevestre", 0.0);
+        jac.test("oberbroeckling", "oberbrockling", 0.92857143);
+        jac.test("shufflebotham", "shufflebottom", 0.73333333);
+        jac.test("fitzalan", "goushill", 0.14285714);
+        jac.test("taillefer", "angouleme", 0.28571429);
+        jac.test("sumarlidasson", "somerledsson", 0.5625);
+        jac.test("billung", "sachsen", 0.076923077);
+        jac.test("springham", "springhorn", 0.58333333);
+        jac.test("aubigny", "albini", 0.44444444);
+        jac.test("landvatter", "merckle", 0.21428571);
+        jac.test("kluczykowski", "kluck", 0.41666667);
+        jac.test("wentworthfitzwilliam", "fitzwilliam", 0.55);
+        jac.test("vanschouwen", "cornelissen", 0.375);
+        jac.test("haraldsson", "forkbeard", 0.26666667);
+        jac.test("deliercourt", "juillet", 0.38461538);
+        jac.test("behol", "jennet", 0.1);
+        jac.test("goughcalthorpe", "calthorpe", 0.64285714);
+        jac.test("tietsoort", "willemszen", 0.1875);
+        jac.test("featherstonhaugh", "featherstonehaugh", 0.94117647);
+        jac.test("hepburnstuartforbestrefusis", "trefusis", 0.2962963);
+        jac.test("ynyr", "gwent", 0.125);
+        jac.test("dewindsor", "fitzotho", 0.13333333);
+        jac.test("destroismaisons", "destrosmaisons", 0.93333333);
+        jac.test("chetwyndstapylton", "stapylton", 0.52941176);
+        jac.test("fivekiller", "ghigau", 0.066666667);
+        jac.test("featherstonhaugh", "fetherstonbaugh", 0.82352941);
+        jac.test("minkrevicius", "minkevich", 0.61538462);
+        jac.test("vanderburchgraeff", "burchgraeff", 0.64705882);
+        jac.test("essenmacher", "eunmaker", 0.46153846);
+        jac.test("siebenthaler", "sevendollar", 0.4375);
+        jac.test("twisletonwykehamfiennes", "fiennes", 0.30434783);
+        jac.test("degloucester", "fitzroger", 0.3125);
+        jac.test("during", "shaumloffel", 0.0625);
+        jac.test("alcombrack", "alkenbrack", 0.53846154);
     }
 }
