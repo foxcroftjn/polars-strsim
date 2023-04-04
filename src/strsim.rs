@@ -37,12 +37,12 @@ fn split_offsets(len: usize, n: usize) -> Vec<(usize, usize)> {
 }
 
 fn parallel_apply(
-    df: DataFrame,
+    mut df: DataFrame,
     col_a: &str,
     col_b: &str,
     name: &str,
     function: SimilarityFunctionType,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     let offsets = split_offsets(df.height(), rayon::current_num_threads());
 
     let out = Float64Chunked::new(
@@ -77,7 +77,8 @@ fn parallel_apply(
             .collect::<Vec<Option<f64>>>(),
     );
 
-    Ok(out.into_series())
+    df.with_column(out.into_series())?;
+    return Ok(df);
 }
 
 struct Levenshtein {
@@ -140,7 +141,7 @@ pub(super) fn parallel_levenshtein(
     col_a: &str,
     col_b: &str,
     name: &str,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     Ok(parallel_apply(
         df,
         col_a,
@@ -240,7 +241,7 @@ pub(super) fn parallel_jaro(
     col_a: &str,
     col_b: &str,
     name: &str,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     Ok(parallel_apply(
         df,
         col_a,
@@ -282,7 +283,7 @@ pub(super) fn parallel_jaro_winkler(
     col_a: &str,
     col_b: &str,
     name: &str,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     Ok(parallel_apply(
         df,
         col_a,
@@ -333,7 +334,7 @@ pub(super) fn parallel_jaccard(
     col_a: &str,
     col_b: &str,
     name: &str,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     Ok(parallel_apply(
         df,
         col_a,
@@ -385,7 +386,7 @@ pub(super) fn parallel_sorensen_dice(
     col_a: &str,
     col_b: &str,
     name: &str,
-) -> PolarsResult<Series> {
+) -> PolarsResult<DataFrame> {
     Ok(parallel_apply(
         df,
         col_a,
