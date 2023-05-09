@@ -9,7 +9,7 @@ name = "polars_strsim"
 crate-type = ["cdylib"]
 
 [dependencies]
-polars = "0.27.2"
-pyo3 = "0.18.1"
-pyo3-polars = "0.2.0"
+polars = "0.29.0"
+pyo3 = "0.18.3"
+pyo3-polars = "0.3.0"
 rayon = "1.7.0"
