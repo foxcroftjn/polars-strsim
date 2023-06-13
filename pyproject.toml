@@ -1,10 +1,10 @@
 [build-system]
-requires = ["maturin>=0.15,<0.16"]
+requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
 name = "polars-strsim"
-dependencies = ["polars[pyarrow]~=0.17"]
+dependencies = ["polars[pyarrow]"]
 requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Rust",
