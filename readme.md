@@ -14,7 +14,7 @@ Each similarity measure returns a value normalized between 0.0 and 1.0 (inclusiv
 
 ## Installing the Library
 
-To build and install this library from source, first ensure you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. You will also need maturin, which you can install via `pip install maturin[patchelf]`
+To build and install this library from source, first ensure you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. You will also need maturin, which you can install via `pip install 'maturin[patchelf]'`
 
 polars-strsim can then be installed in your current python environment by running `maturin develop --release`
 
