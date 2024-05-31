@@ -45,6 +45,11 @@ pub fn parallel_apply(
 ) -> PolarsResult<Series> {
     let a = inputs[0].str()?;
     let b = inputs[1].str()?;
+    if a.len() != b.len() && a.len() != 1 && b.len() != 1 {
+        return Err(PolarsError::ShapeMismatch(
+            "Inputs must have the same length, or one of them must be a Utf8 literal.".into(),
+        ));
+    }
     if context.parallel() {
         let mut function: Box<dyn SimilarityFunction> = match function {
             SimilarityFunctionType::Levenshtein => Box::new(Levenshtein::new()),
