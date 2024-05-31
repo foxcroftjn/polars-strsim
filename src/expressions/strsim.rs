@@ -1,10 +1,12 @@
 use polars::prelude::*;
+use pyo3_polars::derive::CallerContext;
+use pyo3_polars::export::polars_core::POOL;
 use rayon::prelude::*;
 use std::collections::HashMap;
 
 const INITIAL_BUFFER_LENGTH: usize = 50;
 
-enum SimilarityFunctionType {
+pub enum SimilarityFunctionType {
     Levenshtein,
     Jaro,
     JaroWinkler,
@@ -30,55 +32,70 @@ fn split_offsets(len: usize, n: usize) -> Vec<(usize, usize)> {
                 } else {
                     chunk_size
                 };
-                (partition * chunk_size, len)
+                (offset, len)
             })
             .collect()
     }
 }
 
-fn parallel_apply(
-    mut df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
+pub fn parallel_apply(
+    inputs: &[Series],
+    context: CallerContext,
     function: SimilarityFunctionType,
-) -> PolarsResult<DataFrame> {
-    let offsets = split_offsets(df.height(), rayon::current_num_threads());
+) -> PolarsResult<Series> {
+    let a = inputs[0].str()?;
+    let b = inputs[1].str()?;
+    if context.parallel() {
+        let mut function: Box<dyn SimilarityFunction> = match function {
+            SimilarityFunctionType::Levenshtein => Box::new(Levenshtein::new()),
+            SimilarityFunctionType::Jaro => Box::new(Jaro::new()),
+            SimilarityFunctionType::JaroWinkler => Box::new(JaroWinkler::new()),
+            SimilarityFunctionType::Jaccard => Box::new(Jaccard::new()),
+            SimilarityFunctionType::SorensenDice => Box::new(SorensenDice::new()),
+        };
+        let out: Float64Chunked = if b.len() == 1 {
+            let b = b.get(0).unwrap();
+            arity::unary_elementwise_values(a, |a| function.compute(a, b))
+        } else if a.len() == 1 {
+            let a = a.get(0).unwrap();
+            arity::unary_elementwise_values(b, |b| function.compute(a, b))
+        } else {
+            arity::binary_elementwise_values(a, b, |a, b| function.compute(a, b))
+        };
+        Ok(out.into_series())
+    } else {
+        POOL.install(|| {
+            let splits = split_offsets(a.len(), POOL.current_num_threads());
 
-    let out = Float64Chunked::new(
-        name,
-        offsets
-            .par_iter()
-            .map(|(offset, len)| {
-                let sub_df = df.slice(*offset as i64, *len);
-                let string_a = sub_df.column(col_a)?;
-                let string_b = sub_df.column(col_b)?;
-                let mut function: Box<dyn SimilarityFunction> = match function {
-                    SimilarityFunctionType::Levenshtein => Box::new(Levenshtein::new()),
-                    SimilarityFunctionType::Jaro => Box::new(Jaro::new()),
-                    SimilarityFunctionType::JaroWinkler => Box::new(JaroWinkler::new()),
-                    SimilarityFunctionType::Jaccard => Box::new(Jaccard::new()),
-                    SimilarityFunctionType::SorensenDice => Box::new(SorensenDice::new()),
-                };
-
-                Ok(string_a
-                    .utf8()?
-                    .into_iter()
-                    .zip(string_b.utf8()?.into_iter())
-                    .map(|(a, b)| match (a, b) {
-                        (Some(a), Some(b)) => Some(function.compute(a, b)),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>())
-            })
-            .collect::<PolarsResult<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-            .collect::<Vec<Option<f64>>>(),
-    );
-
-    df.with_column(out.into_series())?;
-    return Ok(df);
+            let chunks: Vec<_> = splits
+                .into_par_iter()
+                .map(|(offset, len)| {
+                    let mut function: Box<dyn SimilarityFunction> = match function {
+                        SimilarityFunctionType::Levenshtein => Box::new(Levenshtein::new()),
+                        SimilarityFunctionType::Jaro => Box::new(Jaro::new()),
+                        SimilarityFunctionType::JaroWinkler => Box::new(JaroWinkler::new()),
+                        SimilarityFunctionType::Jaccard => Box::new(Jaccard::new()),
+                        SimilarityFunctionType::SorensenDice => Box::new(SorensenDice::new()),
+                    };
+                    let out: Float64Chunked = if b.len() == 1 {
+                        let a = a.slice(offset as i64, len);
+                        let b = b.get(0).unwrap();
+                        arity::unary_elementwise_values(&a, |a| function.compute(a, b))
+                    } else if a.len() == 1 {
+                        let a = a.get(0).unwrap();
+                        let b = b.slice(offset as i64, len);
+                        arity::unary_elementwise_values(&b, |b| function.compute(a, b))
+                    } else {
+                        let a = a.slice(offset as i64, len);
+                        let b = b.slice(offset as i64, len);
+                        arity::binary_elementwise_values(&a, &b, |a, b| function.compute(a, b))
+                    };
+                    out.downcast_iter().cloned().collect::<Vec<_>>()
+                })
+                .collect();
+            Ok(Float64Chunked::from_chunk_iter("", chunks.into_iter().flatten()).into_series())
+        })
+    }
 }
 
 struct Levenshtein {
@@ -100,7 +117,7 @@ impl Levenshtein {
 impl SimilarityFunction for Levenshtein {
     // adapted from https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows
     fn compute(&mut self, a: &str, b: &str) -> f64 {
-        if (a == "" && b == "") || (a == b) {
+        if (a.is_empty() && b.is_empty()) || (a == b) {
             return 1.0;
         }
         let a = {
@@ -132,23 +149,8 @@ impl SimilarityFunction for Levenshtein {
                 .min(matrix[j][v1] + 1);
             }
         }
-        return 1.0 - (matrix[b.len()][a.len() % 2] as f64 / a.len().max(b.len()) as f64);
+        1.0 - (matrix[b.len()][a.len() % 2] as f64 / a.len().max(b.len()) as f64)
     }
-}
-
-pub(super) fn parallel_levenshtein(
-    df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
-) -> PolarsResult<DataFrame> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        name,
-        SimilarityFunctionType::Levenshtein,
-    )?)
 }
 
 struct Jaro {
@@ -169,9 +171,9 @@ impl Jaro {
 
 impl SimilarityFunction for Jaro {
     fn compute(&mut self, a: &str, b: &str) -> f64 {
-        if (a == "" && b == "") || (a == b) {
+        if (a.is_empty() && b.is_empty()) || (a == b) {
             return 1.0;
-        } else if a == "" || b == "" {
+        } else if a.is_empty() || b.is_empty() {
             return 0.0;
         }
         let a = {
@@ -226,29 +228,12 @@ impl SimilarityFunction for Jaro {
             .filter(|&(i, j)| a[i] != b[j])
             .count();
         if m == 0 {
-            return 0.0;
+            0.0
         } else {
-            return (m as f64 / a.len() as f64
-                + m as f64 / b.len() as f64
-                + (m - t / 2) as f64 / m as f64)
-                / 3.0;
+            (m as f64 / a.len() as f64 + m as f64 / b.len() as f64 + (m - t / 2) as f64 / m as f64)
+                / 3.0
         }
     }
-}
-
-pub(super) fn parallel_jaro(
-    df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
-) -> PolarsResult<DataFrame> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        name,
-        SimilarityFunctionType::Jaro,
-    )?)
 }
 
 struct JaroWinkler {
@@ -278,21 +263,6 @@ impl SimilarityFunction for JaroWinkler {
     }
 }
 
-pub(super) fn parallel_jaro_winkler(
-    df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
-) -> PolarsResult<DataFrame> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        name,
-        SimilarityFunctionType::JaroWinkler,
-    )?)
-}
-
 struct Jaccard {
     buffer: HashMap<char, [usize; 2]>,
 }
@@ -307,9 +277,9 @@ impl Jaccard {
 
 impl SimilarityFunction for Jaccard {
     fn compute(&mut self, a: &str, b: &str) -> f64 {
-        if (a == "" && b == "") || (a == b) {
+        if (a.is_empty() && b.is_empty()) || (a == b) {
             return 1.0;
-        } else if a == "" || b == "" {
+        } else if a.is_empty() || b.is_empty() {
             return 0.0;
         }
         let buffer = {
@@ -325,23 +295,8 @@ impl SimilarityFunction for Jaccard {
             f[1] += v[0].max(v[1]);
             f
         });
-        return frac[0] as f64 / frac[1] as f64;
+        frac[0] as f64 / frac[1] as f64
     }
-}
-
-pub(super) fn parallel_jaccard(
-    df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
-) -> PolarsResult<DataFrame> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        name,
-        SimilarityFunctionType::Jaccard,
-    )?)
 }
 
 struct SorensenDice {
@@ -358,9 +313,9 @@ impl SorensenDice {
 
 impl SimilarityFunction for SorensenDice {
     fn compute(&mut self, a: &str, b: &str) -> f64 {
-        if (a == "" && b == "") || (a == b) {
+        if (a.is_empty() && b.is_empty()) || (a == b) {
             return 1.0;
-        } else if a == "" || b == "" {
+        } else if a.is_empty() || b.is_empty() {
             return 0.0;
         }
         let buffer = {
@@ -377,23 +332,8 @@ impl SimilarityFunction for SorensenDice {
             f[1] += v[1];
             f
         });
-        return 2.0 * frac[0] as f64 / (frac[1] + frac[2]) as f64;
+        2.0 * frac[0] as f64 / (frac[1] + frac[2]) as f64
     }
-}
-
-pub(super) fn parallel_sorensen_dice(
-    df: DataFrame,
-    col_a: &str,
-    col_b: &str,
-    name: &str,
-) -> PolarsResult<DataFrame> {
-    Ok(parallel_apply(
-        df,
-        col_a,
-        col_b,
-        name,
-        SimilarityFunctionType::SorensenDice,
-    )?)
 }
 
 #[cfg(test)]
