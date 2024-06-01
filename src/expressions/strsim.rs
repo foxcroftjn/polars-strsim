@@ -202,7 +202,7 @@ impl SimilarityFunction for Jaro {
                 .extend(std::iter::repeat([false; 2]).take(a.len().max(b.len())));
             &mut self.flagged
         };
-        for (i, &a_i) in a.iter().enumerate() {
+        for (i, &a_i) in a.iter().take(b.len() + bound).enumerate() {
             let lowerbound = if bound > i { 0 } else { i - bound };
             let upperbound = (i + bound).min(b.len() - 1);
             for j in lowerbound..=upperbound {
