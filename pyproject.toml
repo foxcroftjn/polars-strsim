@@ -3,7 +3,7 @@ requires = ["maturin>=1.5.1,<2.0"]
 build-backend = "maturin"
 
 [project]
-version = "0.2.0"
+version = "0.2.1"
 name = "polars-strsim"
 dependencies = ["polars>=0.20.0"]
 requires-python = ">=3.8"
