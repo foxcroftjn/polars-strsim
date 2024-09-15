@@ -14,6 +14,14 @@ Each similarity measure returns a value normalized between 0.0 and 1.0 (inclusiv
 
 ## Installing the Library
 
+### With pip
+
+```bash
+pip install polars-strsim
+```
+
+### From Source
+
 To build and install this library from source, first ensure you have [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. You will also need maturin, which you can install via `pip install 'maturin[patchelf]'`
 
 polars-strsim can then be installed in your current python environment by running `maturin develop --release`
@@ -24,19 +32,21 @@ polars-strsim can then be installed in your current python environment by runnin
 
 ```python
 import polars as pl
-from polars_strsim import *
+from polars_strsim import levenshtein, jaro, jaro_winkler, jaccard, sorensen_dice
 
-df = pl.DataFrame({
-    "name_a": ["phillips", "phillips", "",         "", None,       None],
-    "name_b": ["phillips", "philips",  "phillips", "", "phillips", None]
-}).with_columns(
+df = pl.DataFrame(
+    {
+        "name_a": ["phillips", "phillips", ""        , "", None      , None],
+        "name_b": ["phillips", "philips" , "phillips", "", "phillips", None],
+    }
+).with_columns(
     levenshtein=levenshtein("name_a", "name_b"),
     jaro=jaro("name_a", "name_b"),
     jaro_winkler=jaro_winkler("name_a", "name_b"),
     jaccard=jaccard("name_a", "name_b"),
-    sorensen_dice=sorensen_dice("name_a", "name_b")
+    sorensen_dice=sorensen_dice("name_a", "name_b"),
 )
-    
+
 print(df)
 ```
 **Output:**
