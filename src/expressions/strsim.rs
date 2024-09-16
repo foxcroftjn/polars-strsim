@@ -98,7 +98,10 @@ pub fn parallel_apply(
                     out.downcast_iter().cloned().collect::<Vec<_>>()
                 })
                 .collect();
-            Ok(Float64Chunked::from_chunk_iter("", chunks.into_iter().flatten()).into_series())
+            Ok(
+                Float64Chunked::from_chunk_iter("".into(), chunks.into_iter().flatten())
+                    .into_series(),
+            )
         })
     }
 }
