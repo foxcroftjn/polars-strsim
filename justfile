@@ -19,3 +19,7 @@ build:
 # test linux wheels
 test-build:
     uv run --no-project --isolated --with polars-strsim --find-links target/wheels python demo.py
+
+# install from source to local python environment
+develop:
+    uvx --with 'maturin[patchelf]' maturin develop --release --uv
