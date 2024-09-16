@@ -28,3 +28,7 @@ keywords = ["polars-extension", "string-similarity"]
 authors = [{ name = "Jeremy Foxcroft" }]
 description = "Polars extension for string similarity"
 readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/foxcroftjn/polars-strsim"
+Issues = "https://github.com/foxcroftjn/polars-strsim/issues"

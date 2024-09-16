@@ -1,3 +1,7 @@
+<a href="https://pypi.org/project/polars-strsim/">
+    <img src="https://img.shields.io/pypi/v/polars-strsim.svg" alt="PyPi Latest Release"/>
+</a>
+
 # String Similarity Measures for Polars
 
 This package provides python bindings to compute various string similarity measures directly on a polars dataframe. All string similarity measures are implemented in rust and computed in parallel.
