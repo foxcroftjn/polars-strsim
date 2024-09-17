@@ -51,21 +51,22 @@ df = pl.DataFrame(
     sorensen_dice=sorensen_dice("name_a", "name_b"),
 )
 
-print(df)
+with pl.Config(ascii_tables=True):
+    print(df)
 ```
 **Output:**
 ```
 shape: (6, 7)
-┌──────────┬──────────┬─────────────┬──────────┬──────────────┬─────────┬───────────────┐
-│ name_a   ┆ name_b   ┆ levenshtein ┆ jaro     ┆ jaro_winkler ┆ jaccard ┆ sorensen_dice │
-│ ---      ┆ ---      ┆ ---         ┆ ---      ┆ ---          ┆ ---     ┆ ---           │
-│ str      ┆ str      ┆ f64         ┆ f64      ┆ f64          ┆ f64     ┆ f64           │
-╞══════════╪══════════╪═════════════╪══════════╪══════════════╪═════════╪═══════════════╡
-│ phillips ┆ phillips ┆ 1.0         ┆ 1.0      ┆ 1.0          ┆ 1.0     ┆ 1.0           │
-│ phillips ┆ philips  ┆ 0.875       ┆ 0.958333 ┆ 0.975        ┆ 0.875   ┆ 0.933333      │
-│          ┆ phillips ┆ 0.0         ┆ 0.0      ┆ 0.0          ┆ 0.0     ┆ 0.0           │
-│          ┆          ┆ 1.0         ┆ 1.0      ┆ 1.0          ┆ 1.0     ┆ 1.0           │
-│ null     ┆ phillips ┆ null        ┆ null     ┆ null         ┆ null    ┆ null          │
-│ null     ┆ null     ┆ null        ┆ null     ┆ null         ┆ null    ┆ null          │
-└──────────┴──────────┴─────────────┴──────────┴──────────────┴─────────┴───────────────┘
++----------+----------+-------------+----------+--------------+---------+---------------+
+| name_a   | name_b   | levenshtein | jaro     | jaro_winkler | jaccard | sorensen_dice |
+| ---      | ---      | ---         | ---      | ---          | ---     | ---           |
+| str      | str      | f64         | f64      | f64          | f64     | f64           |
++=======================================================================================+
+| phillips | phillips | 1.0         | 1.0      | 1.0          | 1.0     | 1.0           |
+| phillips | philips  | 0.875       | 0.958333 | 0.975        | 0.875   | 0.933333      |
+|          | phillips | 0.0         | 0.0      | 0.0          | 0.0     | 0.0           |
+|          |          | 1.0         | 1.0      | 1.0          | 1.0     | 1.0           |
+| null     | phillips | null        | null     | null         | null    | null          |
+| null     | null     | null        | null     | null         | null    | null          |
++----------+----------+-------------+----------+--------------+---------+---------------+
 ```

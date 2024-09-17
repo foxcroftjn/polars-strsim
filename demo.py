@@ -14,4 +14,5 @@ df = pl.DataFrame(
     sorensen_dice=sorensen_dice("name_a", "name_b"),
 )
 
-print(df)
+with pl.Config(ascii_tables=True):
+    print(df)
